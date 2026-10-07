@@ -711,8 +711,13 @@ function exportXlsx(XLSX, accounts, results) {
   const { blocks, baseOrder } = buildBlocks(accounts, results);
   const per = 7, step = 8;
   const aoa = [];
-  // 第 1 行：账户名（后续合并）
-  aoa.push(accounts.map((acc, j) => (j === 0 ? acc.name : "      " + acc.name)));
+  // 第 1 行：账户名——写入区块每一列并居中（兼容不支持合并单元格的查看器）
+  const accRow = [];
+  accounts.forEach((acc) => {
+    for (let k = 0; k < per; k++) accRow.push(acc.name);
+    accRow.push("");
+  });
+  aoa.push(accRow);
   // 第 2 行：表头
   const headerRow = [];
   accounts.forEach(() => {
@@ -737,9 +742,15 @@ function exportXlsx(XLSX, accounts, results) {
     const c0 = j * step;
     ws["!merges"].push({ s: { r: 0, c: c0 }, e: { r: 0, c: c0 + per - 1 } });
   });
-  // 样式
-  const headerFill = { patternType: "solid", fgColor: { rgb: "1F4E78" } };
-  const accFill = { patternType: "solid", fgColor: { rgb: "DCE6F1" } };
+  // 样式：每个账户一种填充色（浅色=账户名行，深色=表头行）
+  const ACC_COLORS = [
+    { name: "DCE6F1", head: "B4C6E7" },   // 蓝
+    { name: "E2EFDA", head: "A9D08E" },   // 绿
+    { name: "FFF2CC", head: "FFD966" },   // 黄
+    { name: "FCE4D6", head: "F4B183" },   // 橙
+    { name: "E4DFEC", head: "B4A7D6" },   // 紫
+    { name: "D9D9D9", head: "A6A6A6" },   // 灰
+  ];
   const thin = { top: { style: "thin", color: { rgb: "BBBBBB" } }, bottom: { style: "thin", color: { rgb: "BBBBBB" } },
                  left: { style: "thin", color: { rgb: "BBBBBB" } }, right: { style: "thin", color: { rgb: "BBBBBB" } } };
   const range = XLSX.utils.decode_range(ws["!ref"]);
@@ -748,14 +759,17 @@ function exportXlsx(XLSX, accounts, results) {
       const addr = XLSX.utils.encode_cell({ r: R, c: C });
       if (!ws[addr]) ws[addr] = { t: "s", v: "" };
       ws[addr].s = { border: thin };
-      if (R === 1) {
-        ws[addr].s.fill = headerFill;
+      const j = Math.floor(C / step);
+      const inBlock = (C % step) < per;
+      const col = ACC_COLORS[j % ACC_COLORS.length];
+      if (R === 1 && inBlock) {
+        ws[addr].s.fill = { patternType: "solid", fgColor: { rgb: col.head } };
         ws[addr].s.font = { bold: true, color: { rgb: "FFFFFF" } };
         ws[addr].s.alignment = { horizontal: "center", vertical: "center" };
       }
-      if (R === 0) {
+      if (R === 0 && inBlock) {
         ws[addr].s.font = { bold: true, color: { rgb: "1F4E78" }, size: 12 };
-        ws[addr].s.fill = accFill;
+        ws[addr].s.fill = { patternType: "solid", fgColor: { rgb: col.name } };
         ws[addr].s.alignment = { horizontal: "center", vertical: "center" };
       }
     }
