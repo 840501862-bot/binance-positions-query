@@ -245,22 +245,6 @@
  * ================================================================ */
 
 const FILTER_SYMBOLS = {
-  "大宗商品": [
-    "XAUUSDT",
-    "CLUSDT",
-    "BZUSDT",
-    "XAGUSDT",
-    "NATGASUSDT",
-    "COPPERUSDT",
-    "XPTUSDT",
-    "XPDUSDT",
-    "USDBRLUSDT",
-    "SNDKUSDT",
-    "SPCXUSDT",
-    "SKHYNIXUSDT",
-    "MUUSDT",
-    "NVDAUSDT"
-  ],
   "主流币": [
     "ZECUSDT",
     "XRPUSDT",
@@ -333,12 +317,8 @@ const FILTER_SYMBOLS = {
     "PNUTUSDT",
     "PNUTUSDC"
   ],
-  "山寨币": [
-    "ZECUSDT",
-    "XRPUSDT"
-  ]
 };
-const FILTER_CATEGORIES = ["全部", "大宗商品", "主流币", "山寨币", "USDT", "USDC"];
+const FILTER_CATEGORIES = ["全部", "主流币", "USDT", "USDC"];
 
 const LS_KEY = "binance_positions_config_v1";
 const DEFAULT_ACCOUNTS = [
@@ -360,7 +340,7 @@ const state = {
   results: null,       // 过滤后的持仓（用于显示/导出）
   rawResults: null,    // 未过滤（切换筛选时重筛）
   errors: {},
-  filter: "大宗商品",
+  filter: "主流币",
   fetching: false,
   autoOpen: true,
 };
