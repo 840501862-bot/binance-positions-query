@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>币安合约仓位一键查询（GitHub 部署版）</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23F0B90B'/><path d='M9 22V14l3 2 4-8 4 9 3-4v9z' fill='%2313120f'/></svg>">
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #151b23;
+    --panel-2: #1b2430;
+    --border: #26303d;
+    --text: #e6edf3;
+    --muted: #8b97a7;
+    --accent: #F0B90B;
+    --accent-ink: #17130a;
+    --pos: #2ea043;
+    --neg: #f85149;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+  button, select, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+
+  /* ========== 顶栏 ========== */
+  .top {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+    padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-right: auto; }
+  .brand .logo { width: 30px; height: 30px; }
+  .brand h1 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+  .brand .tag {
+    font-size: 11px; color: var(--accent);
+    border: 1px solid var(--accent); border-radius: 99px; padding: 1px 8px; opacity: .9;
+  }
+  .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border-radius: var(--radius);
+    border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
+    cursor: pointer; transition: border-color .12s, background .12s; white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn svg { width: 15px; height: 15px; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .btn.primary:hover:not(:disabled) { background: #ffd33d; }
+  .btn.ghost { background: transparent; }
+  .btn.danger { color: var(--neg); border-color: var(--neg); }
+
+  .ctl { background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 10px; }
+  .chk {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--muted); font-size: 13px; white-space: nowrap; cursor: pointer;
+  }
+  .chk input { accent-color: var(--accent); }
+
+  /* ========== 状态栏 / 筛选栏 ========== */
+  .bar {
+    padding: 8px 20px; background: var(--panel); border-bottom: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  }
+  #status { color: var(--muted); font-size: 13px; flex: 1; min-width: 220px; }
+  #status.busy { color: var(--accent); }
+  .filterbar label { color: var(--muted); font-size: 13px; }
+  .filterbar .hint { color: var(--muted); font-size: 12px; opacity: .8; }
+  .filterbar select { min-width: 150px; }
+
+  #errbox {
+    margin: 12px 20px 0; padding: 10px 14px;
+    border: 1px solid var(--neg); border-radius: var(--radius);
+    background: rgba(248, 81, 73, .08); color: var(--neg);
+    font-size: 13px; white-space: pre-wrap;
+  }
+
+  /* ========== 表格 ========== */
+  .table-wrap {
+    margin: 12px 20px 20px; border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--panel); overflow: auto; max-height: calc(100vh - 210px);
+  }
+  table { border-collapse: collapse; width: 100%; min-width: 3000px; table-layout: fixed; }
+  thead th {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--panel-2); border-bottom: 1px solid var(--border);
+    padding: 8px 10px; font-size: 12.5px; font-weight: 600;
+    color: var(--muted); text-align: right; white-space: nowrap;
+  }
+  thead th.acc {
+    background: #202b3a; color: var(--text); font-size: 13.5px;
+    text-align: center; border-right: 1px solid var(--border);
+  }
+  thead th.sym { text-align: left; }
+  thead th.gap { background: transparent; border: none; }
+  thead th.gap-top { border: none; }
+  tbody td {
+    padding: 7px 10px; border-bottom: 1px solid #1b232e;
+    font-variant-numeric: tabular-nums; text-align: right;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  tbody td.sym { text-align: left; color: var(--text); }
+  tbody td.gap { background: transparent; }
+  tbody tr:nth-child(even) { background: #131a22; }
+  tbody tr:hover { background: #1a2330; }
+  td .qty { color: var(--text); }
+  .pos { color: var(--pos); font-weight: 600; }
+  .neg { color: var(--neg); font-weight: 600; }
+  .empty-row td { text-align: center; color: var(--muted); padding: 28px 10px; font-size: 13.5px; }
+
+  /* ========== 设置弹窗 ========== */
+  .mask {
+    position: fixed; inset: 0; background: rgba(5, 8, 12, .66);
+    display: none; align-items: flex-start; justify-content: center;
+    padding: 40px 16px; z-index: 50; overflow: auto;
+  }
+  .mask.open { display: flex; }
+  .modal {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    width: 640px; max-width: 100%; padding: 20px;
+  }
+  .modal h2 { margin: 0 0 14px; font-size: 16px; }
+  .modal .sec { margin-bottom: 14px; }
+  .modal .sec h3 { margin: 0 0 8px; font-size: 13px; color: var(--accent); font-weight: 600; }
+  .modal .row { display: grid; grid-template-columns: 110px 1fr; gap: 8px 10px; align-items: center; margin-bottom: 8px; }
+  .modal .row label { color: var(--muted); font-size: 13px; }
+  .modal input {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 10px; width: 100%;
+  }
+  .modal input:focus { border-color: var(--accent); outline: none; }
+  .modal .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .modal .masked { font-size: 12px; color: var(--muted); grid-column: 2; }
+  .modal .foot { display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px; }
+
+  /* ========== Toast ========== */
+  #toast {
+    position: fixed; right: 20px; bottom: 20px;
+    background: var(--panel-2); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    border-radius: var(--radius); padding: 10px 16px; font-size: 13px; max-width: 420px;
+    opacity: 0; transform: translateY(8px);
+    transition: opacity .18s, transform .18s; pointer-events: none; z-index: 60;
+  }
+  #toast.show { opacity: 1; transform: none; }
+
+  @media (max-width: 760px) {
+    .top { padding: 10px 12px; }
+    .bar { padding: 8px 12px; }
+    .table-wrap { margin: 10px 12px 16px; }
+    .brand h1 { font-size: 15px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="7" fill="#F0B90B"/>
+      <path d="M9 22V14l3 2 4-8 4 9 3-4v9z" fill="#17130a"/>
+    </svg>
+    <h1>币安合约仓位一键查询</h1>
+    <span class="tag">GitHub 部署版</span>
+  </div>
+  <div class="actions">
+    <select id="contractType" class="ctl" title="合约类型">
+      <option value="usdt">USDT 本位合约</option>
+      <option value="coin">币本位合约</option>
+    </select>
+    <button id="btnFetch" class="btn primary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+      一键获取
+    </button>
+    <button id="btnExport" class="btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M4 19h16"/></svg>
+      导出 Excel
+    </button>
+    <button id="btnSettings" class="btn ghost">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      设置
+    </button>
+    <label class="chk"><input type="checkbox" id="autoOpen"> 获取后自动下载 Excel</label>
+  </div>
+</header>
+
+<div class="bar filterbar">
+  <label for="filterCat">筛选交易对</label>
+  <select id="filterCat" class="ctl"></select>
+  <span class="hint">筛选列表已内置在页面中；USDT / USDC 按计价币筛选</span>
+</div>
+
+<div class="bar" style="border-bottom:none; padding-top:0;">
+  <span id="status">就绪：请先点击「设置」填入 API 密钥，再点「一键获取」</span>
+  <span id="cfgInfo" style="color:var(--muted); font-size:12.5px;"></span>
+</div>
+
+<div id="errbox" style="display:none;"></div>
+
+<main>
+  <div class="table-wrap" id="tableWrap">
+    <table id="posTable">
+      <thead id="posHead"></thead>
+      <tbody id="posBody"></tbody>
+    </table>
+  </div>
+</main>
+
+<div class="mask" id="settingsMask">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+    <h2 id="setTitle">API 密钥设置</h2>
+    <div id="settingsBody"></div>
+    <div class="foot">
+      <button id="btnSaveSettings" class="btn primary">保存更改</button>
+      <button id="btnCancelSettings" class="btn">取消</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+/* ================================================================
+ * 币安合约仓位一键查询 — GitHub 部署版（纯静态，无后端）
+ *
+ * 与本地服务版的核心差异：
+ *  - 密钥不写入代码/仓库：在「设置」里填入后保存在本机浏览器 localStorage
+ *  - 直接由浏览器调用币安接口（币安 API 已允许跨域 CORS）
+ *  - 签名用浏览器内置 WebCrypto（crypto.subtle）计算 HMAC-SHA256
+ *  - 筛选列表已内置（无法像本地版那样读取同目录 txt）
+ * ================================================================ */
+
+const FILTER_SYMBOLS = {
+  "大宗商品": [
+    "XAUUSDT",
+    "CLUSDT",
+    "BZUSDT",
+    "XAGUSDT",
+    "NATGASUSDT",
+    "COPPERUSDT",
+    "XPTUSDT",
+    "XPDUSDT",
+    "USDBRLUSDT",
+    "SNDKUSDT",
+    "SPCXUSDT",
+    "SKHYNIXUSDT",
+    "MUUSDT",
+    "NVDAUSDT"
+  ],
+  "主流币": [
+    "ZECUSDT",
+    "XRPUSDT",
+    "BNBUSDT",
+    "SOLUSDT",
+    "UNIUSDT",
+    "DOGEUSDT",
+    "ZECUSDC",
+    "XRPUSDC",
+    "BNBUSDC",
+    "SOLUSDC",
+    "UNIUSDC",
+    "DOGEUSDC",
+    "NEARUSDT",
+    "NEARUSDC",
+    "SUIUSDT",
+    "SUIUSDC",
+    "ENAUSDT",
+    "NAUSDC",
+    "AVAXUSDT",
+    "AVAXUSDC",
+    "AAVEUSDT",
+    "AAVEUSDC",
+    "LINKUSDT",
+    "LINKUSDC",
+    "HBARUSDT",
+    "HBARUSDC",
+    "1000PEPEUSDT",
+    "1000PEPEUSDC",
+    "ARBUSDT",
+    "ARBUSDC",
+    "WLDUSDT",
+    "WLDUSDC",
+    "ADAUSDT",
+    "ADAUSDC",
+    "FILUSDT",
+    "FILUSDC",
+    "CRVUSDT",
+    "CRVUSDC",
+    "LTCUSDT",
+    "LTCUSDC",
+    "TRUMPUSDT",
+    "TRUMPUSDC",
+    "PENGUUSDT",
+    "PENGUUSDC",
+    "BCHUSDT",
+    "BCHUSDC",
+    "TIAUSDT",
+    "TIAUSDC",
+    "1000BONKUSDT",
+    "1000BONKUSDC",
+    "ETHFIUSDT",
+    "ETHFIUSDC",
+    "1000SHIBUSDT",
+    "1000SHIBUSDC",
+    "WIFUSDT",
+    "WIFUSDC",
+    "BOMEUSDT",
+    "BOMEUSDC",
+    "ORDIUSDT",
+    "ORDIUSDC",
+    "BIOUSDT",
+    "BIOUSDC",
+    "KAITOUSDT",
+    "KAITOUSDC",
+    "WLFIUSDT",
+    "WLFIUSDC",
+    "NEOUSDT",
+    "NEOUSDC",
+    "PNUTUSDT",
+    "PNUTUSDC"
+  ],
+  "山寨币": [
+    "ZECUSDT",
+    "XRPUSDT"
+  ]
+};
+const FILTER_CATEGORIES = ["全部", "大宗商品", "主流币", "山寨币", "USDT", "USDC"];
+
+const LS_KEY = "binance_positions_config_v1";
+const DEFAULT_ACCOUNTS = [
+  { name: "主账户",  api_key: "", api_secret: "" },
+  { name: "子账户1", api_key: "", api_secret: "" },
+  { name: "子账户2", api_key: "", api_secret: "" },
+  { name: "子账户3", api_key: "", api_secret: "" },
+  { name: "子账户4", api_key: "", api_secret: "" },
+  { name: "子账户5", api_key: "", api_secret: "" },
+];
+const BASE_URLS  = { usdt: "https://fapi.binance.com", coin: "https://dapi.binance.com" };
+const POSITION_PATHS = { usdt: "/fapi/v2/positionRisk", coin: "/dapi/v1/positionRisk" };
+const TIME_PATHS = { usdt: "/fapi/v1/time", coin: "/dapi/v1/time" };
+const REQ_TIMEOUT = 15000;
+
+/* ================= 状态 ================= */
+const state = {
+  config: null,
+  results: null,       // 过滤后的持仓（用于显示/导出）
+  rawResults: null,    // 未过滤（切换筛选时重筛）
+  errors: {},
+  filter: "大宗商品",
+  fetching: false,
+  autoOpen: true,
+};
+
+const $ = (id) => document.getElementById(id);
+
+/* ================= 本地配置（localStorage） ================= */
+function loadConfigLocal() {
+  let cfg = {
+    contract_type: "usdt",
+    auto_open_excel: true,
+    accounts: JSON.parse(JSON.stringify(DEFAULT_ACCOUNTS)),
+  };
+  try {
+    const raw = JSON.parse(localStorage.getItem(LS_KEY) || "null");
+    if (raw) cfg = Object.assign(cfg, raw);
+  } catch (e) { /* 忽略损坏数据 */ }
+  const accs = (cfg.accounts || []).map(a => ({
+    name: String(a.name || "账户"),
+    api_key: String(a.api_key || ""),
+    api_secret: String(a.api_secret || ""),
+  }));
+  while (accs.length < 6) accs.push({ name: "账户" + (accs.length + 1), api_key: "", api_secret: "" });
+  cfg.accounts = accs.slice(0, 6);
+  return cfg;
+}
+
+function saveConfigLocal(cfg) {
+  localStorage.setItem(LS_KEY, JSON.stringify(cfg));
+}
+
+function maskKey(k) {
+  k = (k || "").trim();
+  if (!k) return "";
+  return k.slice(0, 4) + "****" + k.slice(-4);
+}
+
+/* ================= 工具 ================= */
+let toastTimer = null;
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 3500);
+}
+
+function setStatus(text, busy) {
+  const s = $("status");
+  s.textContent = text;
+  s.classList.toggle("busy", !!busy);
+}
+
+function showErr(errors) {
+  const box = $("errbox");
+  const lines = Object.entries(errors || {}).map(([k, v]) => k + "：" + v);
+  if (lines.length) {
+    box.textContent = lines.join("\n");
+    box.style.display = "block";
+  } else {
+    box.style.display = "none";
+  }
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[c]);
+}
+
+function shortErr(e) {
+  const s = String((e && e.message) || e || "未知错误");
+  return s.slice(0, 200);
+}
+
+function baseOf(symbol) {
+  const s = String(symbol).toUpperCase();
+  for (const q of ["USDC", "USDT"]) {
+    if (s.endsWith(q)) return s.slice(0, -q.length);
+  }
+  return s;
+}
+
+function fmtQty(v) {
+  const sign = v >= 0 ? "+" : "-";
+  const n = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    .format(Math.abs(v));
+  return sign + n;
+}
+
+function fmtRoi(v) {
+  const n = v.toFixed(2);
+  return (v > 0 ? "+" : "") + n + "%";
+}
+
+/* ================= 币安 API（浏览器直连） ================= */
+async function hmacSha256Hex(secret, text) {
+  if (!window.crypto || !crypto.subtle) {
+    throw new Error("当前浏览器不支持 WebCrypto（请用最新版 Chrome / Edge）");
+  }
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(text));
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+function parsePositions(data) {
+  const positions = [];
+  for (const p of data) {
+    const amt = parseFloat(p.positionAmt || 0) || 0;
+    if (amt <= 0) continue;
+    const entry = parseFloat(p.entryPrice || 0) || 0;
+    const mark = parseFloat(p.markPrice || 0) || 0;
+    const upnl = parseFloat(p.unRealizedProfit || 0) || 0;
+    const lev = parseInt(p.leverage || 1, 10) || 1;
+    const margin = (entry > 0 && lev > 0) ? Math.abs(amt) * entry / lev : 0;
+    const roi = margin ? (upnl / margin * 100) : 0;
+    const notional = (parseFloat(p.notional || 0) || 0) || (amt * mark);
+    positions.push({ "交易对": p.symbol || "", "仓位数量(USDT)": notional, "投资回报率": roi });
+  }
+  positions.sort((a, b) => Math.abs(b["投资回报率"]) - Math.abs(a["投资回报率"]));
+  return positions;
+}
+
+async function fetchAccount(acc, ctype, offsetMs) {
+  const base = BASE_URLS[ctype], path = POSITION_PATHS[ctype];
+  const query = "timestamp=" + (Date.now() + offsetMs) + "&recvWindow=10000";
+  const signature = await hmacSha256Hex(acc.api_secret, query);
+  const url = base + path + "?" + query + "&signature=" + signature;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), REQ_TIMEOUT);
+  try {
+    const res = await fetch(url, {
+      headers: { "X-MBX-APIKEY": acc.api_key },
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error("币安API错误(" + res.status + ")：" + (d.msg || res.statusText));
+    }
+    return parsePositions(await res.json());
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function getTimeOffset(ctype) {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(BASE_URLS[ctype] + TIME_PATHS[ctype], { signal: ctrl.signal });
+    clearTimeout(timer);
+    const d = await res.json();
+    return (d.serverTime || 0) - Date.now();
+  } catch (e) {
+    return 0; // 取不到就用本地时间（偏差小时仍可用）
+  }
+}
+
+async function fetchAllAccounts(cfg) {
+  const ctype = cfg.contract_type || "usdt";
+  const offset = await getTimeOffset(ctype);
+  const results = {}, errors = {};
+  for (const acc of cfg.accounts) {
+    if (!(acc.api_key || "").trim() || !(acc.api_secret || "").trim()) {
+      results[acc.name] = null;
+      continue;
+    }
+    try {
+      results[acc.name] = await fetchAccount(acc, ctype, offset);
+    } catch (e) {
+      results[acc.name] = null;
+      errors[acc.name] = shortErr(e);
+    }
+    await new Promise(r => setTimeout(r, 500));
+  }
+  return { results, errors };
+}
+
+/* ================= 筛选 ================= */
+function filterByQuote(results, quote) {
+  const out = {};
+  for (const name in results) {
+    const list = results[name];
+    out[name] = list ? list.filter(p => String(p["交易对"]).toUpperCase().endsWith(quote)) : list;
+  }
+  return out;
+}
+
+function applyFilter(results) {
+  const cat = state.filter;
+  if (!cat || cat === "全部") return results;
+  if (cat === "USDT" || cat === "USDC") return filterByQuote(results, cat);
+  const syms = (FILTER_SYMBOLS[cat] || []).map(s => s.toUpperCase());
+  if (!syms.length) return results;
+  const set = new Set(syms);
+  const out = {};
+  for (const name in results) {
+    const list = results[name];
+    out[name] = list ? list.filter(p => set.has(String(p["交易对"]).toUpperCase())) : list;
+  }
+  return out;
+}
+
+/* ================= 表格渲染 ================= */
+function buildBlocks(accounts, results) {
+  const blocks = {}, baseOrder = [], seen = new Set();
+  for (const acc of accounts) {
+    const name = acc.name;
+    const list = results[name] || [];
+    const umap = {}, cmap = {};
+    for (const p of list) {
+      const b = baseOf(p["交易对"]);
+      if (String(p["交易对"]).toUpperCase().endsWith("USDC")) cmap[b] = p;
+      else umap[b] = p;
+    }
+    blocks[name] = { umap, cmap };
+    for (const p of list) {
+      const b = baseOf(p["交易对"]);
+      if (!seen.has(b)) { seen.add(b); baseOrder.push(b); }
+    }
+  }
+  return { blocks, baseOrder };
+}
+
+function renderTable() {
+  const head = $("posHead"), body = $("posBody");
+  head.innerHTML = ""; body.innerHTML = "";
+  const accounts = (state.config && state.config.accounts) || [];
+  const results = state.results || {};
+  const hasAny = accounts.some(a => (results[a.name] || []).length > 0);
+
+  if (!accounts.length || !hasAny) {
+    const colCount = accounts.length ? accounts.length * 8 - 1 : 1;
+    head.innerHTML = "";
+    body.innerHTML = '<tr class="empty-row"><td colspan="' + colCount + '">暂无持仓数据。请先点击「一键获取」拉取各账户合约持仓。</td></tr>';
+    return;
+  }
+
+  // 表头第 1 行：账户名（跨 7 列）
+  let row1 = "<tr>";
+  accounts.forEach((acc, j) => {
+    if (j > 0) row1 += '<th class="gap-top" colspan="1"></th>';
+    row1 += '<th class="acc" colspan="7">' + esc(acc.name) + "</th>";
+  });
+  row1 += "</tr>";
+
+  // 表头第 2 行：列名
+  let row2 = "<tr>";
+  accounts.forEach((acc, j) => {
+    if (j > 0) row2 += '<th class="gap"> </th>';
+    row2 += '<th class="sym">交易对</th><th>仓位数量(USDT)</th><th>投资回报率(%)</th>';
+    row2 += '<th class="gap"> </th>';
+    row2 += '<th class="sym">交易对</th><th>仓位数量(USDC)</th><th>投资回报率(%)</th>';
+  });
+  row2 += "</tr>";
+  head.innerHTML = row1 + row2;
+
+  const { blocks, baseOrder } = buildBlocks(accounts, results);
+  let rows = "";
+  baseOrder.forEach((base) => {
+    rows += "<tr>";
+    accounts.forEach((acc, j) => {
+      if (j > 0) rows += '<td class="gap"></td>';
+      const { umap, cmap } = blocks[acc.name] || { umap: {}, cmap: {} };
+      const up = umap[base], cp = cmap[base];
+      if (up) rows += cellTrio(up);
+      else rows += '<td class="sym"></td><td></td><td></td>';
+      rows += '<td class="gap"></td>';
+      if (cp) rows += cellTrio(cp);
+      else rows += '<td class="sym"></td><td></td><td></td>';
+    });
+    rows += "</tr>";
+  });
+  body.innerHTML = rows;
+}
+
+function cellTrio(p) {
+  const roi = p["投资回报率"];
+  const cls = roi > 0 ? "pos" : roi < 0 ? "neg" : "";
+  return '<td class="sym">' + esc(p["交易对"]) + '</td>'
+    + '<td class="qty">' + fmtQty(p["仓位数量(USDT)"]) + "</td>"
+    + '<td class="' + cls + '">' + fmtRoi(roi) + "</td>";
+}
+
+/* ================= 获取 ================= */
+async function doFetch() {
+  if (state.fetching) return;
+  state.fetching = true;
+  const btn = $("btnFetch");
+  btn.disabled = true;
+  const t0 = Date.now();
+  const ticker = setInterval(() => {
+    setStatus("正在获取各账户合约持仓…（已用时 " + Math.round((Date.now() - t0) / 1000) + " 秒）", true);
+  }, 1000);
+  setStatus("正在获取各账户合约持仓…", true);
+  try {
+    const ctype = $("contractType").value;
+    const r = await fetchAllAccounts(state.config);
+    state.rawResults = r.results;
+    state.errors = r.errors || {};
+    state.results = applyFilter(r.results);
+    renderTable();
+
+    const accounts = state.config.accounts;
+    const ok = accounts.filter(a => (state.results[a.name] || []).length > 0).length;
+    const total = accounts.reduce((s, a) => s + (state.results[a.name] || []).length, 0);
+    const filt = state.filter === "全部" ? "" : " | 筛选: " + state.filter;
+    const errTxt = Object.keys(state.errors).length ? " | 失败: " + Object.keys(state.errors).length + " 个" : "";
+    const errText = Object.values(state.errors).join(" ");
+    const netHint = /timed out|abort|Failed to fetch|TypeError|NetworkError|offline/i.test(errText)
+      ? "\n提示：无法连接币安接口，请确认浏览器/系统代理（如 Clash）已开启且节点正常，再重试。"
+      : "";
+    if (Object.keys(state.errors).length && total === 0) {
+      setStatus("获取失败" + netHint);
+      showErr(state.errors);
+    } else {
+      setStatus("更新成功 " + new Date().toLocaleTimeString("zh-CN", { hour12: false })
+        + " | 持仓账户 " + ok + " 个 | 持仓 " + total + " 个" + filt + errTxt);
+      showErr(state.errors);
+    }
+    if (total && state.autoOpen) doExport(true);
+  } catch (e) {
+    setStatus("获取失败：" + shortErr(e));
+    showErr({ "全局": shortErr(e) });
+  } finally {
+    clearInterval(ticker);
+    state.fetching = false;
+    btn.disabled = false;
+  }
+}
+
+/* ================= 导出 ================= */
+async function loadSheetJS() {
+  if (window.XLSX) return window.XLSX;
+  return new Promise((resolve) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+    s.onload = () => resolve(window.XLSX || null);
+    s.onerror = () => resolve(null);
+    document.head.appendChild(s);
+  });
+}
+
+function exportXlsx(XLSX, accounts, results) {
+  const { blocks, baseOrder } = buildBlocks(accounts, results);
+  const per = 7, step = 8;
+  const aoa = [];
+  // 第 1 行：账户名（后续合并）
+  aoa.push(accounts.map((acc, j) => (j === 0 ? acc.name : "      " + acc.name)));
+  // 第 2 行：表头
+  const headerRow = [];
+  accounts.forEach(() => {
+    headerRow.push("交易对", "仓位数量(USDT)", "投资回报率(%)", "", "交易对", "仓位数量(USDC)", "投资回报率(%)", "");
+  });
+  aoa.push(headerRow);
+  // 数据行
+  baseOrder.forEach((base) => {
+    const row = [];
+    accounts.forEach((acc) => {
+      const { umap, cmap } = blocks[acc.name] || { umap: {}, cmap: {} };
+      const up = umap[base], cp = cmap[base];
+      row.push(up ? up["交易对"] : "", up ? up["仓位数量(USDT)"] : "", up ? up["投资回报率"] : "", "",
+               cp ? cp["交易对"] : "", cp ? cp["仓位数量(USDT)"] : "", cp ? cp["投资回报率"] : "", "");
+    });
+    aoa.push(row);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!merges"] = [];
+  accounts.forEach((acc, j) => {
+    const c0 = j * step;
+    ws["!merges"].push({ s: { r: 0, c: c0 }, e: { r: 0, c: c0 + per - 1 } });
+  });
+  // 样式
+  const headerFill = { patternType: "solid", fgColor: { rgb: "1F4E78" } };
+  const accFill = { patternType: "solid", fgColor: { rgb: "DCE6F1" } };
+  const thin = { top: { style: "thin", color: { rgb: "BBBBBB" } }, bottom: { style: "thin", color: { rgb: "BBBBBB" } },
+                 left: { style: "thin", color: { rgb: "BBBBBB" } }, right: { style: "thin", color: { rgb: "BBBBBB" } } };
+  const range = XLSX.utils.decode_range(ws["!ref"]);
+  for (let R = range.s.r; R <= range.e.r; R++) {
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const addr = XLSX.utils.encode_cell({ r: R, c: C });
+      if (!ws[addr]) ws[addr] = { t: "s", v: "" };
+      ws[addr].s = { border: thin };
+      if (R === 1) {
+        ws[addr].s.fill = headerFill;
+        ws[addr].s.font = { bold: true, color: { rgb: "FFFFFF" } };
+        ws[addr].s.alignment = { horizontal: "center", vertical: "center" };
+      }
+      if (R === 0) {
+        ws[addr].s.font = { bold: true, color: { rgb: "1F4E78" }, size: 12 };
+        ws[addr].s.fill = accFill;
+        ws[addr].s.alignment = { horizontal: "center", vertical: "center" };
+      }
+    }
+  }
+  // 数值列格式 + ROI 红绿
+  const r0 = 2;
+  for (let i = 0; i < baseOrder.length; i++) {
+    accounts.forEach((acc, j) => {
+      const c0 = j * step;
+      const qty = ws[XLSX.utils.encode_cell({ r: r0 + i, c: c0 + 1 })];
+      const roi = ws[XLSX.utils.encode_cell({ r: r0 + i, c: c0 + 2 })];
+      const qtyC = ws[XLSX.utils.encode_cell({ r: r0 + i, c: c0 + 5 })];
+      const roiC = ws[XLSX.utils.encode_cell({ r: r0 + i, c: c0 + 6 })];
+      [qty, qtyC].forEach(c => { if (c && typeof c.v === "number") c.z = "#,##0.00"; });
+      [roi, roiC].forEach(c => {
+        if (c && typeof c.v === "number") {
+          c.z = "0.00";
+          c.s.font = { bold: true, color: { rgb: c.v > 0 ? "1E8E3E" : c.v < 0 ? "C62828" : "000000" } };
+        }
+      });
+    });
+  }
+  ws["!cols"] = [];
+  accounts.forEach((acc, j) => {
+    const c0 = j * step;
+    [13, 16, 15, 3, 13, 16, 15, 3].forEach((w, k) => { ws["!cols"][c0 + k] = { wch: w }; });
+  });
+  const fname = "币安合约仓位_" + new Date().toISOString().replace(/[-:T]/g, "").slice(0, 15).replace(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, "$1$2$3_$4$5$6") + ".xlsx";
+  XLSX.writeFile(wbOf(ws, XLSX, fname), fname);
+  return fname;
+}
+
+function wbOf(ws, XLSX, fname) {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "合约仓位");
+  return wb;
+}
+
+function exportCsv(accounts, results) {
+  const lines = [["账户", "交易对", "仓位数量(USDT)", "投资回报率(%)"].join(",")];
+  const symbols = [];
+  const map = {};
+  for (const acc of accounts) {
+    for (const p of (results[acc.name] || [])) {
+      if (!map[p["交易对"]]) { map[p["交易对"]] = true; symbols.push(p["交易对"]); }
+    }
+  }
+  for (const sym of symbols) {
+    accounts.forEach((acc) => {
+      const p = (results[acc.name] || []).find(x => x["交易对"] === sym);
+      if (p) {
+        lines.push([acc.name, p["交易对"], p["仓位数量(USDT)"].toFixed(2), p["投资回报率"].toFixed(2)].join(","));
+      }
+    });
+  }
+  const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "币安合约仓位_" + new Date().toISOString().replace(/[-:T]/g, "").slice(0, 15).replace(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, "$1$2$3_$4$5$6") + ".csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  return a.download;
+}
+
+async function doExport(silent) {
+  const accounts = (state.config && state.config.accounts) || [];
+  const hasData = accounts.some(a => (state.results || {})[a.name] && (state.results[a.name] || []).length);
+  if (!hasData) {
+    if (!silent) toast("暂无持仓数据，请先点击「一键获取」");
+    return;
+  }
+  try {
+    const XLSX = await loadSheetJS();
+    if (XLSX) exportXlsx(XLSX, accounts, state.results);
+    else exportCsv(accounts, state.results);
+    if (!silent) toast("已导出并开始下载");
+  } catch (e) {
+    if (!silent) toast("导出失败：" + shortErr(e));
+  }
+}
+
+/* ================= 设置弹窗 ================= */
+function openSettings() {
+  const c = state.config;
+  let html = "";
+  (c.accounts || []).forEach((a, i) => {
+    html += '<div class="sec"><h3>' + esc(a.name) + "</h3>";
+    html += '<div class="row"><label>账户名称</label><input data-name="' + i + '" value="' + esc(a.name) + '"></div>';
+    html += '<div class="row"><label>API Key</label><input data-key="' + i + '" placeholder="留空保持不变"></div>';
+    html += '<div class="row"><label>API Secret</label><input data-secret="' + i + '" type="password" placeholder="留空保持不变"></div>';
+    if (maskKey(a.api_key)) html += '<div class="masked">已保存 Key：' + esc(maskKey(a.api_key)) + "（留空则不修改）</div>";
+    html += "</div>";
+  });
+  html += '<div class="sec"><h3>通用</h3>';
+  html += '<div class="row"><label>合约类型</label><select id="setType" class="ctl">'
+    + '<option value="usdt"' + (c.contract_type === "coin" ? "" : " selected") + '>USDT 本位合约</option>'
+    + '<option value="coin"' + (c.contract_type === "coin" ? " selected" : "") + '>币本位合约</option></select></div>';
+  html += '<div class="row"><label>自动下载</label><label class="chk" style="color:var(--text)"><input type="checkbox" id="setAuto"'
+    + (state.autoOpen ? " checked" : "") + '> 获取后自动下载 Excel</label></div>';
+  html += '<div class="hint">密钥只保存在<b>本机浏览器</b>（localStorage），不会写入仓库或发送到任何服务器；同一台电脑换浏览器需重新填写。建议开启币安 IP 白名单、只勾选「读取」权限。</div></div>';
+  html += '<div class="sec"><h3>安全</h3>';
+  html += '<button id="btnClearKeys" class="btn danger">清除本机已保存的密钥</button>';
+  html += '<div class="hint">如担心本机数据残留，可一键清空。清空后需要重新在「设置」中填写密钥。</div></div>';
+  $("settingsBody").innerHTML = html;
+  $("btnClearKeys").addEventListener("click", () => {
+    localStorage.removeItem(LS_KEY);
+    state.config = loadConfigLocal();
+    state.results = state.rawResults = null;
+    renderTable();
+    refreshCfgInfo();
+    $("settingsMask").classList.remove("open");
+    toast("已清除本机保存的密钥");
+  });
+  $("settingsMask").classList.add("open");
+}
+
+function saveSettings() {
+  const accounts = [];
+  (state.config.accounts || []).forEach((a, i) => {
+    const g = (sel) => document.querySelector('[data-' + sel + '="' + i + '"]');
+    const keyInput = g("key"), secretInput = g("secret");
+    accounts.push({
+      name: g("name").value.trim() || a.name,
+      api_key: keyInput.value.trim() || a.api_key,
+      api_secret: secretInput.value.trim() || a.api_secret,
+    });
+  });
+  state.config.contract_type = $("setType").value;
+  state.config.auto_open_excel = $("setAuto").checked;
+  state.config.accounts = accounts;
+  state.autoOpen = $("setAuto").checked;
+  $("autoOpen").checked = state.autoOpen;
+  $("contractType").value = state.config.contract_type;
+  saveConfigLocal(state.config);
+  $("settingsMask").classList.remove("open");
+  refreshCfgInfo();
+  renderTable();
+  toast("配置已保存（仅保存在本机浏览器）");
+}
+
+function refreshCfgInfo() {
+  const c = state.config;
+  const names = (c.accounts || []).map(a => a.name).join(" / ");
+  const n = (c.accounts || []).filter(a => (a.api_key || "").trim()).length;
+  $("cfgInfo").textContent = "已配置密钥 " + n + "/" + (c.accounts || []).length + " 个账户：" + names;
+}
+
+/* ================= 事件绑定 ================= */
+$("btnFetch").addEventListener("click", doFetch);
+$("btnExport").addEventListener("click", () => doExport(false));
+$("btnSettings").addEventListener("click", openSettings);
+$("btnSaveSettings").addEventListener("click", saveSettings);
+$("btnCancelSettings").addEventListener("click", () => $("settingsMask").classList.remove("open"));
+$("settingsMask").addEventListener("click", (e) => { if (e.target === $("settingsMask")) $("settingsMask").classList.remove("open"); });
+
+$("filterCat").addEventListener("change", async (e) => {
+  state.filter = e.target.value;
+  if (state.rawResults && Object.values(state.rawResults).some(v => v && v.length)) {
+    state.results = applyFilter(state.rawResults);
+    renderTable();
+    const total = (state.config.accounts || []).reduce((s, a) => s + (state.results[a.name] || []).length, 0);
+    setStatus("已切换筛选: " + state.filter + " | 显示持仓 " + total + " 个");
+  } else {
+    setStatus("已选择筛选: " + state.filter + "，点击「一键获取」后生效");
+  }
+});
+
+$("contractType").addEventListener("change", (e) => {
+  state.config.contract_type = e.target.value;
+  saveConfigLocal(state.config);
+  const name = e.target.value === "coin" ? "币本位合约" : "USDT本位合约";
+  setStatus("已切换为 " + name + "，请点击「一键获取」");
+});
+
+$("autoOpen").addEventListener("change", (e) => {
+  state.autoOpen = e.target.checked;
+  state.config.auto_open_excel = e.target.checked;
+  saveConfigLocal(state.config);
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && $("settingsMask").classList.contains("open")) {
+    $("settingsMask").classList.remove("open");
+  }
+});
+
+/* ================= 启动 ================= */
+(function init() {
+  state.config = loadConfigLocal();
+  state.autoOpen = !!state.config.auto_open_excel;
+  $("autoOpen").checked = state.autoOpen;
+  $("contractType").value = state.config.contract_type;
+  // 筛选下拉
+  const sel = $("filterCat");
+  sel.innerHTML = "";
+  for (const cat of FILTER_CATEGORIES) {
+    const opt = document.createElement("option");
+    const n = cat === "USDT" || cat === "USDC" || cat === "全部" ? null : (FILTER_SYMBOLS[cat] || []).length;
+    opt.value = cat;
+    opt.textContent = n == null ? cat : cat + "（" + n + " 个交易对）";
+    sel.appendChild(opt);
+  }
+  sel.value = state.filter;
+  refreshCfgInfo();
+  renderTable();
+})();
+</script>
+</body>
+</html>
